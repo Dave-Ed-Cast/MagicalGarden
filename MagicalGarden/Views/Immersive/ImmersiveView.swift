@@ -81,7 +81,7 @@ struct ImmersiveView: View {
             }
         }
 #endif
-    }gi
+    }
 #if os(iOS)
     private func setupPlaneDetector() {
         let detector = iOSPlaneDetector()
