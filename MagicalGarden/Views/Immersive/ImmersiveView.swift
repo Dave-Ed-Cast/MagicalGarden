@@ -14,57 +14,58 @@ struct ImmersiveView: View {
     @State private var planeDetector: (any PlaneDetectionProtocol & ObservableObject)?
     @State private var objectWillChangeSubscription: AnyCancellable?
     
+    let root: Entity = .init()
+    
     var body: some View {
         ZStack {
-            #if os(iOS)
+#if os(iOS)
             if let iosDetector = planeDetector as? iOSPlaneDetector {
                 PlaneDetectingARView(detector: iosDetector)
                     .edgesIgnoringSafeArea(.all)
             }
-            #else
+#else
             RealityView { content in
-                
+                content.add(root)
+                let detector = VisionPlaneDetector(root: root)
             }
-            #endif
+#endif
         }
         .onAppear {
-            if planeDetector == nil {
-                setupPlaneDetector()
-            }
+            if planeDetector == nil { setupPlaneDetector() }
             
             Task { @MainActor in
                 try? await planeDetector?.startDetection()
-                planeDetector?.onPlaneDetected = { anchor in
-                    let box = ModelEntity(mesh: .generateBox(size: 0.1), materials: [SimpleMaterial(color: .green, isMetallic: false)])
-                    box.position = .zero
-                    anchor.addChild(box)
+                planeDetector?.onPlaneDetected = { anchorEntity, arAnchor in
+                    let width = arAnchor.planeExtent.width
+                    let depth = arAnchor.planeExtent.height
+                    let height: Float = 0.05
                     
-                    #if os(iOS)
+                    let position = SIMD3<Float>(arAnchor.center.x, arAnchor.center.y / 2, arAnchor.center.z)
+                    
+                    let mesh = MeshResource.generateBox(size: [width, height, depth])
+                    let material = SimpleMaterial(color: .green.withAlphaComponent(0.5), isMetallic: false)
+                    let box = ModelEntity(mesh: mesh, materials: [material])
+                    
+                    box.position = position
+                    anchorEntity.addChild(box)
+                    
+#if os(iOS)
                     if let iosDetector = planeDetector as? iOSPlaneDetector {
-                        iosDetector.arView.scene.addAnchor(anchor)
-                        print("adding")
+                        iosDetector.arView.scene.addAnchor(anchorEntity)
+                        print("Plane box added: \(width) x \(depth)m")
                     }
-                    #else
-                    content.add(anchor)
-                    #endif
+#else
+                    content.add(anchorEntity)
+#endif
                 }
             }
         }
-        .onDisappear {
-            objectWillChangeSubscription?.cancel()
-        }
+        .onDisappear { objectWillChangeSubscription?.cancel() }
     }
     
     private func setupPlaneDetector() {
-        #if os(visionOS)
-        let detector = VisionPlaneDetector(root: )
-        #else
         let detector = iOSPlaneDetector()
-        #endif
-        
         planeDetector = detector
-        
-        
         objectWillChangeSubscription = detector.objectWillChange.sink { _ in }
     }
 }

@@ -7,9 +7,9 @@
 
 import RealityKit
 import Foundation
+import ARKit
 
 protocol PlaneDetectionProtocol {
-
     func startDetection() async throws
-    var onPlaneDetected: ((_ anchorEntity: AnchorEntity) -> Void)? { get set }
+    var onPlaneDetected: ((_ anchorEntity: AnchorEntity, _ planeAnchor: ARPlaneAnchor) -> Void)? { get set }
 }

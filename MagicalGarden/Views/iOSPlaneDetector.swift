@@ -9,13 +9,12 @@ import SwiftUI
 import RealityKit
 import ARKit
 
-final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ObservableObject, ARSessionDelegate {
+final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ObservableObject, ARSessionDelegate {    
 
     @Published var isDetecting = false
     @Published var detectedPlanes: [String: AnchorEntity] = [:]
     
-    var onPlaneDetected: ((AnchorEntity) -> Void)?
-    
+    var onPlaneDetected: ((AnchorEntity, ARPlaneAnchor) -> Void)?
     private(set) var arView: ARView!
     private var hasStartedDetection = false
     
@@ -54,15 +53,14 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ObservableObject
             Task { @MainActor in
                 self.detectedPlanes[anchor.identifier.uuidString] = anchorEntity
             }
-            
-            onPlaneDetected?(anchorEntity)
+
+            onPlaneDetected?(anchorEntity, anchor) // Pass both
         }
     }
     
     func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
         for anchor in anchors.compactMap({ $0 as? ARPlaneAnchor }) {
             if let existingAnchor = detectedPlanes[anchor.identifier.uuidString] {
-                // Update the anchor's transform
                 Task { @MainActor in
                     existingAnchor.transform = Transform(matrix: anchor.transform)
                 }
