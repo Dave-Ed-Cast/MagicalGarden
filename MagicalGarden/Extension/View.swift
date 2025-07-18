@@ -1,11 +1,21 @@
 //
-//  AnchorToTopRightModifier.swift
+//  View.swift
 //  MagicalGarden
 //
 //  Created by Davide Castaldi on 16/07/25.
 //
 
 import SwiftUI
+
+extension View {
+    func anchorToTopRight() -> some View {
+        modifier(AnchorToTopRightModifier())
+    }
+
+    func anchorToTopLeft() -> some View {
+        modifier(AnchorToTopLeftModifier())
+    }
+}
 
 struct AnchorToTopRightModifier: ViewModifier {
     func body(content: Content) -> some View {
@@ -44,15 +54,5 @@ struct AnchorToTopLeftModifier: ViewModifier {
 
             Spacer()
         }
-    }
-}
-
-extension View {
-    func anchorToTopRight() -> some View {
-        modifier(AnchorToTopRightModifier())
-    }
-
-    func anchorToTopLeft() -> some View {
-        modifier(AnchorToTopLeftModifier())
     }
 }

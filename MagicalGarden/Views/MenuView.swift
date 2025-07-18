@@ -17,14 +17,24 @@ struct MenuView: View {
     
     var body: some View {
         
-        Toggle(
-            appModel.wantsToPresentImmersiveSpace ? "Exit" : "Enter",
-            isOn: $appModel.wantsToPresentImmersiveSpace
-        )
-        .font(.largeTitle)
-        .buttonBorderShape(.roundedRectangle(radius: 36))
-        .toggleStyle(EnterReturnToggleStyle())
-        .frame(width: 300)
+        VStack {
+            Spacer()
+            VStack(spacing: 8) {
+                Text("Welcome to the garden! Interact with the button to enter or exit it.")
+                Text("Once inside, place the plant(s) on the highlighted plane.")
+            }
+            Spacer()
+            .multilineTextAlignment(.center)
+            .font(.footnote)
+            Toggle(
+                appModel.wantsToPresentImmersiveSpace ? "Exit" : "Enter",
+                isOn: $appModel.wantsToPresentImmersiveSpace
+            )
+            .font(.largeTitle)
+            .buttonBorderShape(.roundedRectangle(radius: 36))
+            .toggleStyle(EnterReturnToggleStyle())
+            .frame(width: 300)
+        }
         
     }
 }
@@ -35,7 +45,7 @@ struct EnterReturnToggleStyle: ToggleStyle {
             configuration.isOn.toggle()
         } label: {
             configuration.label
-                .frame(maxWidth: .infinity, idealHeight: 100)
+                .frame(maxWidth: .infinity, idealHeight: 50)
         }
     }
 }

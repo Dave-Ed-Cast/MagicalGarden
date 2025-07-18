@@ -13,8 +13,9 @@ struct MagicalGardenApp: App {
     @State private var appModel = AppModel()
     @State private var onboarding: OnboardingParameters = .init()
     @State var isMenuExpanded: Bool = true
+    
 #if os(visionOS)
-    var body: some SwiftUI.Scene {
+    var body: some Scene {
         WindowGroup(id: "main") {
             ZStack {
                 if onboarding.completed {
@@ -23,8 +24,8 @@ struct MagicalGardenApp: App {
                     InfoView(showInfo: .constant(true))
                 }
             }
-            //            .frame(width: 676, height: 550)
-            //            .fixedSize()
+            .frame(width: 676, height: 550)
+            .fixedSize()
         }
         
         ImmersiveSpace(id: appModel.immersiveSpaceID) {
@@ -38,9 +39,10 @@ struct MagicalGardenApp: App {
 #endif
     
 #if os(iOS)
-    var body: some SwiftUI.Scene {
+    var body: some Scene {
         
         Group {
+            let size = UIScreen.main.bounds.size
             WindowGroup {
                 ZStack {
                     if appModel.immersiveSpaceState == .open {
@@ -53,16 +55,16 @@ struct MagicalGardenApp: App {
                     DisclosureGroup("Menu", isExpanded: $isMenuExpanded) {
                         MenuView(appModel: appModel)
                     }
-                    .frame(width: isMenuExpanded ? 300 : 80)
+                    .frame(width: isMenuExpanded ? size.width * 0.79 : size.width * 0.2)
                     .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 20)
                     .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 20))
                     .anchorToTopLeft()
                 }
                 .ignoresSafeArea()
             }
-            .onChange(of: appModel.wantsToPresentImmersiveSpace) {
-                appModel.immersiveSpaceState = .open
+            .onChange(of: appModel.wantsToPresentImmersiveSpace) { _, newValue in
+                appModel.immersiveSpaceState = newValue ? .open : .closed
             }
         }
     }
