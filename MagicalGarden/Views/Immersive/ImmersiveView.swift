@@ -67,9 +67,7 @@ struct ImmersiveView: View {
                     let box = ModelEntity(mesh: mesh, materials: [material])
                     
                     box.position = position
-                    anchorEntity.addChild(box)
-                    
-                    
+                    anchorEntity.addChild(box)                    
                     
                     if let iosDetector = planeDetector as? iOSPlaneDetector {
                         Task.detached { @MainActor in

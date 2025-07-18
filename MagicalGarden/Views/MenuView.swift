@@ -19,23 +19,25 @@ struct MenuView: View {
         
         VStack {
             Spacer()
-            VStack(spacing: 8) {
-                Text("Welcome to the garden! Interact with the button to enter or exit it.")
-                Text("Once inside, place the plant(s) on the highlighted plane.")
+            VStack(spacing: 20) {
+                Text("🌱 Welcome to the Magical Garden 🌱")
+                    .font(.headline.bold())
+                
+                Text("Step into or out of the garden whenever you like. \nOnce inside, gently place your plant on the designed surface to begin.")
+                    .font(.footnote)
             }
+            
             Spacer()
-            .multilineTextAlignment(.center)
-            .font(.footnote)
+            
             Toggle(
-                appModel.wantsToPresentImmersiveSpace ? "Exit" : "Enter",
+                appModel.wantsToPresentImmersiveSpace ? "🌙 Step Out" : "🌼 Step Into the Garden",
                 isOn: $appModel.wantsToPresentImmersiveSpace
             )
-            .font(.largeTitle)
+            .font(.title2)
             .buttonBorderShape(.roundedRectangle(radius: 36))
             .toggleStyle(EnterReturnToggleStyle())
-            .frame(width: 300)
         }
-        
+        .frame(maxWidth: UIScreen.main.bounds.width * 0.9)
     }
 }
 
