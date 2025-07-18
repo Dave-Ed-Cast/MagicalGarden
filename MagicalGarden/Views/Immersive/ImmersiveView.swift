@@ -8,11 +8,9 @@
 import SwiftUI
 import RealityKit
 import ARKit
-import Combine
 
 struct ImmersiveView: View {
-    @State private var planeDetector: (any PlaneDetectionProtocol & ObservableObject)?
-    @State private var objectWillChangeSubscription: AnyCancellable?
+    @State private var planeDetector: PlaneDetectionProtocol?
     
     let root: Entity = .init()
     
@@ -60,12 +58,10 @@ struct ImmersiveView: View {
                 }
             }
         }
-        .onDisappear { objectWillChangeSubscription?.cancel() }
     }
     
     private func setupPlaneDetector() {
         let detector = iOSPlaneDetector()
         planeDetector = detector
-        objectWillChangeSubscription = detector.objectWillChange.sink { _ in }
     }
 }

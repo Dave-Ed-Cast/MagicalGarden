@@ -9,10 +9,11 @@ import SwiftUI
 import RealityKit
 import ARKit
 
-final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ObservableObject, ARSessionDelegate {    
+@Observable
+final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegate {
 
-    @Published var isDetecting = false
-    @Published var detectedPlanes: [String: AnchorEntity] = [:]
+    var isDetecting = false
+    var detectedPlanes: [String: AnchorEntity] = [:]
     
     var onPlaneDetected: ((AnchorEntity, ARPlaneAnchor) -> Void)?
     private(set) var arView: ARView!
@@ -93,7 +94,7 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ObservableObject
 }
 
 struct PlaneDetectingARView: UIViewRepresentable {
-    @ObservedObject var detector: iOSPlaneDetector
+    @Bindable var detector: iOSPlaneDetector
     
     func makeUIView(context: Context) -> ARView { detector.makeARView() }
     
