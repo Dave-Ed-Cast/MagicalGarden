@@ -11,18 +11,25 @@ import ARKit
 
 @Observable
 final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegate {
-
+    
     var isDetecting = false
     var detectedPlanes: [String: AnchorEntity] = [:]
-    
     var onPlaneDetected: ((AnchorEntity, ARPlaneAnchor) -> Void)?
+    var entityChanged: [String: Bool] = [:]
+    
     private(set) var arView: ARView!
+    
     private var hasStartedDetection = false
+    private var spawnedPlaneIDs: Set<UUID> = []
     
     func makeARView() -> ARView {
         let view = ARView(frame: .zero)
         view.session.delegate = self
         self.arView = view
+        
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
+        view.addGestureRecognizer(tapGesture)
+        
         return view
     }
     
@@ -32,7 +39,7 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
         await MainActor.run { self.isDetecting = true }
         
         let config = ARWorldTrackingConfiguration()
-        config.planeDetection = [.horizontal, .vertical]
+        config.planeDetection = [.horizontal]
         
         await arView.session.run(config, options: [.resetTracking, .removeExistingAnchors])
         hasStartedDetection = true
@@ -42,61 +49,78 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
         arView?.session.pause()
         hasStartedDetection = false
         
-        self.isDetecting = false
-        self.detectedPlanes.removeAll()
+        isDetecting = false
+        detectedPlanes.removeAll()
+        entityChanged.removeAll()
+        spawnedPlaneIDs.removeAll()
+    }
+    
+    @objc private func handleTap(_ sender: UITapGestureRecognizer) {
+        guard let view = arView else { return }
+        let tapLocation = sender.location(in: view)
+
+        if changeEntityStatus(at: tapLocation, in: view) { return }
+
+        spawnUniqueEntity(at: tapLocation, in: view)
+    }
+    
+    private func changeEntityStatus(at location: CGPoint, in view: ARView) -> Bool {
+        guard let entity = view.entity(at: location),
+              !entity.name.isEmpty,
+              entity.components.has(InputTargetComponent.self),
+              let modelEntity = entity as? ModelEntity
+        else { return false }
+
+        if entityChanged[entity.name] == false {
+            let newMaterial = SimpleMaterial(color: .green, isMetallic: false)
+            modelEntity.model?.materials = [newMaterial]
+            entityChanged[entity.name] = true
+            print("Changed entity: \(entity.name)")
+        } else {
+            print("Entity \(entity.name) has already been changed.")
+        }
+
+        return true
+    }
+    
+    private func spawnUniqueEntity(at location: CGPoint, in view: ARView) {
+        let results = view.raycast(from: location, allowing: .existingPlaneGeometry, alignment: .horizontal)
+
+        guard let first = results.first,
+              let planeAnchor = first.anchor as? ARPlaneAnchor,
+              let anchorEntity = detectedPlanes[planeAnchor.identifier.uuidString],
+              !spawnedPlaneIDs.contains(planeAnchor.identifier)
+        else { return }
+
+        let worldPosition = first.worldTransform.columns.3.xyz
+        let localPosition = anchorEntity.convert(position: worldPosition, from: nil)
         
+        spawnRedBox(at: localPosition, parent: anchorEntity)
+        spawnedPlaneIDs.insert(planeAnchor.identifier)
     }
     
-    func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
-        for anchor in anchors.compactMap({ $0 as? ARPlaneAnchor }) {
-            let anchorEntity = AnchorEntity(anchor: anchor)
-            
-            Task { @MainActor in
-                self.detectedPlanes[anchor.identifier.uuidString] = anchorEntity
-            }
-
-            onPlaneDetected?(anchorEntity, anchor) // Pass both
-        }
-    }
-    
-    func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
-        for anchor in anchors.compactMap({ $0 as? ARPlaneAnchor }) {
-            if let existingAnchor = detectedPlanes[anchor.identifier.uuidString] {
-                Task { @MainActor in
-                    existingAnchor.transform = Transform(matrix: anchor.transform)
-                }
-            }
-        }
-    }
-    
-    func session(_ session: ARSession, didRemove anchors: [ARAnchor]) {
-        for anchor in anchors.compactMap({ $0 as? ARPlaneAnchor }) {
-            Task { @MainActor in
-                if let removedAnchor = self.detectedPlanes.removeValue(forKey: anchor.identifier.uuidString) {
-                    removedAnchor.removeFromParent()
-                }
+    private func spawnRedBox(at position: SIMD3<Float>, parent: Entity) {
+        let boxMesh = MeshResource.generateBox(size: 0.05)
+        let redMaterial = SimpleMaterial(color: .red, isMetallic: false)
+        let boxEntity = ModelEntity(mesh: boxMesh, materials: [redMaterial])
+        
+        let uniqueName = UUID().uuidString
+        boxEntity.name = uniqueName
+        entityChanged[uniqueName] = false
+        
+        boxEntity.position = SIMD3(x: position.x, y: position.y + 0.05, z: position.z)
+        
+        boxEntity.generateCollisionShapes(recursive: true)
+        
+        let labelEntity = Entity.createTimerLabel(5, for: boxEntity) {
+            if self.entityChanged[boxEntity.name] == false {
+                boxEntity.components.set(InputTargetComponent())
+                print("Box \(boxEntity.name) is now interactable.")
             }
         }
+        labelEntity.position = [boxEntity.position.x, boxEntity.position.y + 0.1, boxEntity.position.z]
+        
+        boxEntity.addChild(labelEntity)
+        parent.addChild(boxEntity)
     }
-    
-    private func session(_ session: ARSession, didFailWithError error: Error) async {
-        print("AR Session failed: \(error)")
-        await MainActor.run {
-            self.isDetecting = false
-        }
-    }
-    
-    private func sessionWasInterrupted(_ session: ARSession) async {
-        await MainActor.run {
-            self.isDetecting = false
-        }
-    }
-}
-
-struct PlaneDetectingARView: UIViewRepresentable {
-    @Bindable var detector: iOSPlaneDetector
-    
-    func makeUIView(context: Context) -> ARView { detector.makeARView() }
-    
-    func updateUIView(_ uiView: ARView, context: Context) {}
 }

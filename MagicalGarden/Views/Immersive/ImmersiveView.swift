@@ -28,9 +28,10 @@ struct ImmersiveView: View {
             if let iosDetector = planeDetector as? iOSPlaneDetector {
                 PlaneDetectingARView(detector: iosDetector)
                     .edgesIgnoringSafeArea(.all)
+                
                 if iosDetector.detectedPlanes.isEmpty {
                     VStack(spacing: 20) {
-                        Text("Move your phone to detect surfaces.")
+                        Text("Slowly move the phone \nto detect surfaces.")
                             .font(.headline)
                             .foregroundColor(.white)
                             .padding(.horizontal)
@@ -67,7 +68,7 @@ struct ImmersiveView: View {
                     let box = ModelEntity(mesh: mesh, materials: [material])
                     
                     box.position = position
-                    anchorEntity.addChild(box)                    
+                    anchorEntity.addChild(box)
                     
                     if let iosDetector = planeDetector as? iOSPlaneDetector {
                         Task.detached { @MainActor in
