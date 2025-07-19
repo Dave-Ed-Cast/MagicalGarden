@@ -58,9 +58,9 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
     @objc private func handleTap(_ sender: UITapGestureRecognizer) {
         guard let view = arView else { return }
         let tapLocation = sender.location(in: view)
-
+        
         if changeEntityStatus(at: tapLocation, in: view) { return }
-
+        
         spawnUniqueEntity(at: tapLocation, in: view)
     }
     
@@ -70,7 +70,7 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
               entity.components.has(InputTargetComponent.self),
               let modelEntity = entity as? ModelEntity
         else { return false }
-
+        
         if entityChanged[entity.name] == false {
             let newMaterial = SimpleMaterial(color: .green, isMetallic: false)
             modelEntity.model?.materials = [newMaterial]
@@ -79,19 +79,19 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
         } else {
             print("Entity \(entity.name) has already been changed.")
         }
-
+        
         return true
     }
     
     private func spawnUniqueEntity(at location: CGPoint, in view: ARView) {
         let results = view.raycast(from: location, allowing: .existingPlaneGeometry, alignment: .horizontal)
-
+        
         guard let first = results.first,
               let planeAnchor = first.anchor as? ARPlaneAnchor,
               let anchorEntity = detectedPlanes[planeAnchor.identifier.uuidString],
               !spawnedPlaneIDs.contains(planeAnchor.identifier)
         else { return }
-
+        
         let worldPosition = first.worldTransform.columns.3.xyz
         let localPosition = anchorEntity.convert(position: worldPosition, from: nil)
         
@@ -100,7 +100,7 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
     }
     
     private func spawnRedBox(at position: SIMD3<Float>, parent: Entity) {
-        let boxMesh = MeshResource.generateBox(size: 0.05)
+        let boxMesh = MeshResource.generateBox(width: 0.1, height: 0.5, depth: 0.1)
         let redMaterial = SimpleMaterial(color: .red, isMetallic: false)
         let boxEntity = ModelEntity(mesh: boxMesh, materials: [redMaterial])
         
@@ -108,19 +108,46 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
         boxEntity.name = uniqueName
         entityChanged[uniqueName] = false
         
-        boxEntity.position = SIMD3(x: position.x, y: position.y + 0.05, z: position.z)
-        
-        boxEntity.generateCollisionShapes(recursive: true)
-        
-        let labelEntity = Entity.createTimerLabel(5, for: boxEntity) {
+        let labelEntity = Entity.createTimerRing(5, radius: 0.08, thickness: 0.02) {
             if self.entityChanged[boxEntity.name] == false {
                 boxEntity.components.set(InputTargetComponent())
                 print("Box \(boxEntity.name) is now interactable.")
             }
         }
-        labelEntity.position = [boxEntity.position.x, boxEntity.position.y + 0.1, boxEntity.position.z]
         
-        boxEntity.addChild(labelEntity)
-        parent.addChild(boxEntity)
+        if let bounds = boxEntity.model?.mesh.bounds {
+            let visualHeight = bounds.extents.y * boxEntity.scale.y
+            
+            boxEntity.position = SIMD3(x: position.x, y: position.y + visualHeight / 2, z: position.z)
+            boxEntity.generateCollisionShapes(recursive: true)
+            
+            guard let currentCameraTransform = arView.session.currentFrame?.camera.transform else {
+                print("Could not get current camera transform")
+                parent.addChild(boxEntity)
+                return
+            }
+            
+            let parentWorldTransform = parent.transformMatrix(relativeTo: nil)
+            let boxLocalPosition = boxEntity.position
+            let boxWorldPosition = parentWorldTransform * SIMD4<Float>(boxLocalPosition.x, boxLocalPosition.y, boxLocalPosition.z, 1.0)
+            
+            let currentCameraPosition = currentCameraTransform.columns.3.xyz
+            let directionToCamera = normalize(currentCameraPosition - boxWorldPosition.xyz)
+            
+            let yRotation = atan2(directionToCamera.x, directionToCamera.z)
+            let worldLookRotation = simd_quatf(angle: yRotation, axis: SIMD3<Float>(0, 1, 0))
+            
+            let parentOrientation = simd_quatf(parentWorldTransform)
+            boxEntity.orientation = parentOrientation.inverse * worldLookRotation
+            
+            labelEntity.position = SIMD3<Float>(x: 0, y: visualHeight / 1.4, z: 0)
+            
+            labelEntity.orientation = simd_quatf(angle: .pi, axis: SIMD3<Float>(0, 1, 0))
+            
+            boxEntity.addChild(labelEntity)
+            parent.addChild(boxEntity)
+        } else {
+            print("something went wrong")
+        }
     }
 }

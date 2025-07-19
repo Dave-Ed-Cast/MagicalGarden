@@ -10,7 +10,7 @@ import SwiftUI
 
 extension Entity {
     
-    static func makeTerrain() async throws -> ModelEntity {
+    func makeTerrain() async throws -> ModelEntity {
         
         let terrain = ModelEntity(mesh: .generateBox(width: 0.5, height: 0.01, depth: 0.05), materials: [UnlitMaterial(color: .cyan.withAlphaComponent(0.5))])
         
@@ -19,7 +19,7 @@ extension Entity {
         return terrain
     }
     
-    static func createTimerLabel(_ time: Int, for parentBox: Entity, onTimerCompletion: @escaping () -> Void) -> ModelEntity {
+    func createTimerLabel(_ time: Int, for parentBox: Entity, onTimerCompletion: @escaping () -> Void) -> ModelEntity {
         var remainingTime = time
         
         let mesh = MeshResource.generateText(
@@ -56,5 +56,40 @@ extension Entity {
         }
         
         return textEntity
+    }
+    
+    static func createTimerRing(
+        _ totalTime: Int,
+        radius: Float = 10,
+        thickness: Float = 2.5,
+        onTimerCompletion: @escaping () -> Void
+    ) -> ModelEntity {
+        var elapsedTime = 0
+        
+        let initialAngle: Float = 10.0
+        let ringMesh = MeshResource.generateRing(radius: radius, thickness: thickness, angle: initialAngle)
+        let material = SimpleMaterial(color: .blue, isMetallic: false)
+        
+        let ringEntity = ModelEntity(mesh: ringMesh, materials: [material])
+        ringEntity.name = "ring_timer"
+                
+        ringEntity.generateCollisionShapes(recursive: true)
+        
+        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+            elapsedTime += 1
+            
+            if elapsedTime >= totalTime {
+                timer.invalidate()
+                onTimerCompletion()
+            }
+            
+            let percentage = Float(elapsedTime) / Float(totalTime)
+            let newAngle = 10.0 + (350.0 * percentage)
+            
+            let newRingMesh = MeshResource.generateRing(radius: radius, thickness: thickness, angle: newAngle)
+            ringEntity.model?.mesh = newRingMesh
+        }
+        
+        return ringEntity
     }
 }

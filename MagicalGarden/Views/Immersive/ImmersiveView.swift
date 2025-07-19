@@ -61,7 +61,7 @@ struct ImmersiveView: View {
                     let depth = arAnchor.planeExtent.height
                     let height: Float = 0.05
                     
-                    let position = SIMD3<Float>(arAnchor.center.x, arAnchor.center.y / 2, arAnchor.center.z)
+                    let position = SIMD3<Float>(arAnchor.center.x, 0, arAnchor.center.z)
                     
                     let mesh = MeshResource.generateBox(size: [width, height, depth])
                     let material = SimpleMaterial(color: .green.withAlphaComponent(0.5), isMetallic: false)
