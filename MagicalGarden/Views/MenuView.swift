@@ -20,7 +20,7 @@ struct MenuView: View {
         VStack {
             Spacer()
             VStack(spacing: 20) {
-                Text("🌱 Welcome to the Magical Garden 🌱")
+                Text("Welcome to the Magical Garden!")
                     .font(.headline.bold())
                 
                 Text("Step into or out of the garden whenever you like. \nOnce inside, gently place your plant on the designed surface to begin.")
@@ -30,7 +30,7 @@ struct MenuView: View {
             Spacer()
             
             Toggle(
-                appModel.wantsToPresentImmersiveSpace ? "🌙 Step Out" : "🌼 Step Into the Garden",
+                appModel.wantsToPresentImmersiveSpace ? "Step Out" : "Step Into the Garden",
                 isOn: $appModel.wantsToPresentImmersiveSpace
             )
             .font(.title2)

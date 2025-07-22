@@ -49,6 +49,8 @@ struct MagicalGardenApp: App {
                         ZStack {
                             ImmersiveView()
                                 .environment(appModel)
+                                .onAppear { AudioManager.shared.playBackgroundMusic(named: "Music") }
+                                .onDisappear { AudioManager.shared.stopBackgroundMusic() }
                         }
                     }
                     
@@ -59,12 +61,16 @@ struct MagicalGardenApp: App {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 20)
                     .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 20))
+                    .animation(.default, value: isMenuExpanded)
                     .anchorToTopLeft()
                 }
                 .ignoresSafeArea()
             }
             .onChange(of: appModel.wantsToPresentImmersiveSpace) { _, newValue in
                 appModel.immersiveSpaceState = newValue ? .open : .closed
+                
+                if newValue { isMenuExpanded = false }
+                
             }
         }
     }

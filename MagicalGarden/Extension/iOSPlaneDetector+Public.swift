@@ -24,7 +24,6 @@ extension iOSPlaneDetector {
     }
 }
 
-
 struct PlaneDetectingARView: UIViewRepresentable {
     @Bindable var detector: iOSPlaneDetector
     

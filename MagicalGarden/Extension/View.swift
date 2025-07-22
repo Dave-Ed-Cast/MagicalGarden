@@ -8,33 +8,7 @@
 import SwiftUI
 
 extension View {
-    func anchorToTopRight() -> some View {
-        modifier(AnchorToTopRightModifier())
-    }
-
-    func anchorToTopLeft() -> some View {
-        modifier(AnchorToTopLeftModifier())
-    }
-}
-
-struct AnchorToTopRightModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        VStack {
-            Spacer()
-                .frame(height: 40)
-
-            HStack(alignment: .top) {
-                Spacer()
-
-                content
-
-                Spacer()
-                    .frame(width: 20)
-            }
-
-            Spacer()
-        }
-    }
+    func anchorToTopLeft() -> some View { modifier(AnchorToTopLeftModifier()) }
 }
 
 struct AnchorToTopLeftModifier: ViewModifier {

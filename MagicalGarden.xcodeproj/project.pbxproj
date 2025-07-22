@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		3E2BCE212E2FA46B00C60BA0 /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = 3E2BCE202E2FA46B00C60BA0 /* RealityKitContent */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		3E2BCB872E28E3B100C60BA0 /* MagicalGarden.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MagicalGarden.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -15,6 +19,13 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+			);
+			target = 3E2BCB862E28E3B100C60BA0 /* MagicalGarden */;
+		};
+		3E2BCDA62E2E2FB400C60BA0 /* Exceptions for "Packages" folder in "MagicalGarden" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				RealityKitContent,
 			);
 			target = 3E2BCB862E28E3B100C60BA0 /* MagicalGarden */;
 		};
@@ -29,6 +40,14 @@
 			path = MagicalGarden;
 			sourceTree = "<group>";
 		};
+		3E2BCDA52E2E2FB400C60BA0 /* Packages */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3E2BCDA62E2E2FB400C60BA0 /* Exceptions for "Packages" folder in "MagicalGarden" target */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -36,6 +55,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3E2BCE212E2FA46B00C60BA0 /* RealityKitContent in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -46,6 +66,8 @@
 			isa = PBXGroup;
 			children = (
 				3E2BCB892E28E3B100C60BA0 /* MagicalGarden */,
+				3E2BCDA52E2E2FB400C60BA0 /* Packages */,
+				3E2BCE1F2E2FA46B00C60BA0 /* Frameworks */,
 				3E2BCB882E28E3B100C60BA0 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -56,6 +78,13 @@
 				3E2BCB872E28E3B100C60BA0 /* MagicalGarden.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		3E2BCE1F2E2FA46B00C60BA0 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -75,9 +104,11 @@
 			);
 			fileSystemSynchronizedGroups = (
 				3E2BCB892E28E3B100C60BA0 /* MagicalGarden */,
+				3E2BCDA52E2E2FB400C60BA0 /* Packages */,
 			);
 			name = MagicalGarden;
 			packageProductDependencies = (
+				3E2BCE202E2FA46B00C60BA0 /* RealityKitContent */,
 			);
 			productName = MagicalGarden;
 			productReference = 3E2BCB872E28E3B100C60BA0 /* MagicalGarden.app */;
@@ -347,6 +378,13 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3E2BCE202E2FA46B00C60BA0 /* RealityKitContent */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RealityKitContent;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 3E2BCB7F2E28E3B100C60BA0 /* Project object */;
 }

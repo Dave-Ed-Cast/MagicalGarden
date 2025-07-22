@@ -5,8 +5,8 @@
 //  Created by Davide Castaldi on 17/07/25.
 //
 
-import SwiftUI
 import RealityKit
+import RealityKitContent
 import ARKit
 
 @Observable
@@ -18,9 +18,13 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
     var entityChanged: [String: Bool] = [:]
     
     private(set) var arView: ARView!
+    private var planePlantIndex: [UUID: Int] = [:]
+    private var planeActivePlants: [UUID: Set<String>] = [:]
+    private var plantToPlane: [String: UUID] = [:]
+    private let maxPlantsPerPlane = PlantType.allCases.count
     
+    private var allPlantsBloomedSoundPlayed = false
     private var hasStartedDetection = false
-    private var spawnedPlaneIDs: Set<UUID> = []
     
     func makeARView() -> ARView {
         let view = ARView(frame: .zero)
@@ -30,6 +34,19 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         view.addGestureRecognizer(tapGesture)
         
+        Task { @MainActor in
+            guard let particleBloom = try? await Entity(named: "ParticleBloom", in: realityKitContentBundle) else {
+                print("Failed to load ParticleBloom entity")
+                return
+            }
+            
+            particleBloom.name = "ParticleBloom"
+            particleBloom.isEnabled = false
+            
+            let anchor = AnchorEntity(world: .one)
+            anchor.addChild(particleBloom)
+            view.scene.addAnchor(anchor)
+        }
         return view
     }
     
@@ -40,19 +57,8 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
         
         let config = ARWorldTrackingConfiguration()
         config.planeDetection = [.horizontal]
-        
         await arView.session.run(config, options: [.resetTracking, .removeExistingAnchors])
         hasStartedDetection = true
-    }
-    
-    @MainActor func stopDetection() {
-        arView?.session.pause()
-        hasStartedDetection = false
-        
-        isDetecting = false
-        detectedPlanes.removeAll()
-        entityChanged.removeAll()
-        spawnedPlaneIDs.removeAll()
     }
     
     @objc private func handleTap(_ sender: UITapGestureRecognizer) {
@@ -65,89 +71,231 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
     }
     
     private func changeEntityStatus(at location: CGPoint, in view: ARView) -> Bool {
-        guard let entity = view.entity(at: location),
-              !entity.name.isEmpty,
-              entity.components.has(InputTargetComponent.self),
-              let modelEntity = entity as? ModelEntity
-        else { return false }
+        guard var entity = view.entity(at: location) else { return false }
         
-        if entityChanged[entity.name] == false {
-            let newMaterial = SimpleMaterial(color: .green, isMetallic: false)
-            modelEntity.model?.materials = [newMaterial]
-            entityChanged[entity.name] = true
-            print("Changed entity: \(entity.name)")
-        } else {
-            print("Entity \(entity.name) has already been changed.")
+        while let parent = entity.parent, entity.components[PlantComponent.self] == nil { entity = parent }
+        
+        guard let plantComp = entity.components[PlantComponent.self] else {  return false }
+        
+        let timerCompleted = hasTimerCompleted(in: entity)
+        
+        if entityChanged[plantComp.id] == false, plantComp.stage != .bloom, timerCompleted {
+            entityChanged[plantComp.id] = true
+            Task { await advancePlantStage(for: entity, component: plantComp) }
+            return true
+        } else if !timerCompleted, plantComp.stage == .growth {
+            print("Timer not completed yet - wait for 'Tap to bloom!' message")
         }
-        
-        return true
+        return false
+    }
+    
+    private func hasTimerCompleted(in entity: Entity) -> Bool {
+        for child in entity.children {
+            if child.name == "sphere_timer_container" {
+                for grandChild in child.children {
+                    if grandChild.name == "sphere_timer_completion_text" { return true }
+                }
+            }
+        }
+        return false
     }
     
     private func spawnUniqueEntity(at location: CGPoint, in view: ARView) {
         let results = view.raycast(from: location, allowing: .existingPlaneGeometry, alignment: .horizontal)
-        
         guard let first = results.first,
               let planeAnchor = first.anchor as? ARPlaneAnchor,
-              let anchorEntity = detectedPlanes[planeAnchor.identifier.uuidString],
-              !spawnedPlaneIDs.contains(planeAnchor.identifier)
+              let anchorEntity = detectedPlanes[planeAnchor.identifier.uuidString]
         else { return }
         
+        let planeId = planeAnchor.identifier
+        
+        let currentIndex = planePlantIndex[planeId] ?? 0
+        guard currentIndex < maxPlantsPerPlane else { return }
+        
+        let plantType = PlantType.allCases[currentIndex]
         let worldPosition = first.worldTransform.columns.3.xyz
         let localPosition = anchorEntity.convert(position: worldPosition, from: nil)
         
-        spawnRedBox(at: localPosition, parent: anchorEntity)
-        spawnedPlaneIDs.insert(planeAnchor.identifier)
-    }
-    
-    private func spawnRedBox(at position: SIMD3<Float>, parent: Entity) {
-        let boxMesh = MeshResource.generateBox(width: 0.1, height: 0.5, depth: 0.1)
-        let redMaterial = SimpleMaterial(color: .red, isMetallic: false)
-        let boxEntity = ModelEntity(mesh: boxMesh, materials: [redMaterial])
+        if !isValidSpawnLocation(localPosition, on: planeId, minDistance: 0.4) { return }
         
-        let uniqueName = UUID().uuidString
-        boxEntity.name = uniqueName
-        entityChanged[uniqueName] = false
-        
-        let labelEntity = Entity.createTimerRing(5, radius: 0.08, thickness: 0.02) {
-            if self.entityChanged[boxEntity.name] == false {
-                boxEntity.components.set(InputTargetComponent())
-                print("Box \(boxEntity.name) is now interactable.")
-            }
+        Task { @MainActor in
+            await spawnPlantModel(at: localPosition, parent: anchorEntity, type: plantType, planeId: planeId)
         }
         
-        if let bounds = boxEntity.model?.mesh.bounds {
-            let visualHeight = bounds.extents.y * boxEntity.scale.y
-            
-            boxEntity.position = SIMD3(x: position.x, y: position.y + visualHeight / 2, z: position.z)
-            boxEntity.generateCollisionShapes(recursive: true)
-            
-            guard let currentCameraTransform = arView.session.currentFrame?.camera.transform else {
-                print("Could not get current camera transform")
-                parent.addChild(boxEntity)
-                return
+        planePlantIndex[planeId] = currentIndex + 1
+    }
+    
+    private func isValidSpawnLocation(_ position: SIMD3<Float>, on planeId: UUID, minDistance: Float) -> Bool {
+        guard let activePlants = planeActivePlants[planeId] else { return true }
+        
+        guard let planeAnchor = detectedPlanes[planeId.uuidString] else { return true }
+        
+        for plantId in activePlants {
+            if let existingPlant = findPlantEntity(with: plantId, in: planeAnchor) {
+                let distance = length(position - existingPlant.position)
+                if distance < minDistance { return false }
             }
+        }
+        return true
+    }
+    
+    private func findPlantEntity(with id: String, in parent: Entity) -> Entity? {
+        if parent.name == id { return parent }
+        for child in parent.children {
+            if let found = findPlantEntity(with: id, in: child) { return found }
+        }
+        return nil
+    }
+    
+    func spawnPlantModel(at position: SIMD3<Float>, parent: Entity, type: PlantType, planeId: UUID) async {
+        let plantId = UUID().uuidString
+        let modelName = "\(type.rawValue)_Growth"
+        
+        guard let plantEntity = try? await ModelEntity(named: modelName) else { return }
+        
+        await MainActor.run {
+            plantEntity.name = plantId
+            plantEntity.position = position
+        }
+        
+        let randomTime = Int.random(in: 30...180)
+        let timerEntity = await Entity.createSphericalFillingTimer(randomTime, radius: 0.1) {
+            plantEntity.components.set(
+                [
+                    InputTargetComponent(),
+                    PlantComponent(id: plantId, type: type, stage: .growth)
+                ]
+            )
+            plantEntity.generateCollisionShapes(recursive: true)
+        }
+        
+        entityChanged[plantId] = false
+        plantToPlane[plantId] = planeId
+        
+        if planeActivePlants[planeId] == nil { planeActivePlants[planeId] = Set<String>() }
+        planeActivePlants[planeId]?.insert(plantId)
+        
+        if let bounds = await plantEntity.model?.mesh.bounds {
+            let visualHeight = await bounds.extents.y * plantEntity.scale.y
             
-            let parentWorldTransform = parent.transformMatrix(relativeTo: nil)
-            let boxLocalPosition = boxEntity.position
-            let boxWorldPosition = parentWorldTransform * SIMD4<Float>(boxLocalPosition.x, boxLocalPosition.y, boxLocalPosition.z, 1.0)
-            
-            let currentCameraPosition = currentCameraTransform.columns.3.xyz
-            let directionToCamera = normalize(currentCameraPosition - boxWorldPosition.xyz)
-            
-            let yRotation = atan2(directionToCamera.x, directionToCamera.z)
-            let worldLookRotation = simd_quatf(angle: yRotation, axis: SIMD3<Float>(0, 1, 0))
-            
-            let parentOrientation = simd_quatf(parentWorldTransform)
-            boxEntity.orientation = parentOrientation.inverse * worldLookRotation
-            
-            labelEntity.position = SIMD3<Float>(x: 0, y: visualHeight / 1.4, z: 0)
-            
-            labelEntity.orientation = simd_quatf(angle: .pi, axis: SIMD3<Float>(0, 1, 0))
-            
-            boxEntity.addChild(labelEntity)
-            parent.addChild(boxEntity)
+            await MainActor.run {
+                plantEntity.position = SIMD3(x: position.x, y: position.y + visualHeight / 2, z: position.z)
+                plantEntity.addChild(timerEntity)
+                parent.addChild(plantEntity)
+                
+                Entity.playSound(named: "SFX_1", on: plantEntity)
+            }
         } else {
             print("something went wrong")
+        }
+        
+        print("Spawned \(type.rawValue) plant (\(plantId)) with timer ring on plane \(planeId)")
+    }
+    
+    private func advancePlantStage(for entity: Entity, component: PlantComponent) async {
+        guard let nextStage = component.stage.next else {
+            print("Plant \(component.id) is already in final bloom stage")
+            return
+        }
+        
+        if component.stage == .growth && nextStage == .growthBloom {
+            await replaceWithAnimatedModel(entity: entity, component: component)
+            return
+        }
+        
+        let modelName = "\(component.type.rawValue)_\(nextStage.rawValue)"
+        
+        guard let newEntity = try? await Entity(named: modelName) else {
+            print("Failed to load model: \(modelName)")
+            return
+        }
+        
+        let updatedComponent = PlantComponent(id: component.id, type: component.type, stage: nextStage)
+        
+        await MainActor.run {
+            Entity.setNewEntity(newEntity, from: entity, with: updatedComponent)
+            Entity.playSound(named: "SFX_3", on: newEntity)
+        }
+    }
+    
+    private func replaceWithAnimatedModel(entity: Entity, component: PlantComponent) async {
+        
+        let animatedModelName = "\(component.type.rawValue)_\(component.stage.rawValue)"
+        
+        guard let animatedEntity = try? await Entity(named: animatedModelName) else {
+            print("Error loading animated model: \(animatedModelName)")
+            return
+        }
+        
+        let updatedComponent = PlantComponent(id: component.id, type: component.type, stage: .growthBloom)
+        
+        await MainActor.run {
+            
+            if let timerEntity = entity.children.first(where: { $0.name == "ring_timer" }) { timerEntity.removeFromParent() }
+            
+            Entity.setNewEntity(animatedEntity, from: entity, with: updatedComponent)
+            Entity.playSound(named: "SFX_4", on: animatedEntity)
+            
+            if let animation = animatedEntity.availableAnimations.first { animatedEntity.playAnimation(animation) }
+        }
+        
+        do { try await Task.sleep(for: .seconds(2)) }
+        catch { print("couldn't delay") }
+        
+        await replaceWithFinalModel(entity: animatedEntity, component: updatedComponent)
+    }
+    
+    private func replaceWithFinalModel(entity: Entity, component: PlantComponent) async {
+        let finalModelName = "\(component.type.rawValue)_Bloom"
+        
+        do {
+            let finalEntity = try await Entity(named: finalModelName)
+            let finalComponent = PlantComponent(id: component.id, type: component.type, stage: .bloom)
+            
+            await MainActor.run { Entity.setNewEntity(finalEntity, from: entity, with: finalComponent, last: true) }
+            await checkAllPlantsBloomedAndPlaySound(finalEntity)
+        } catch {
+            print("Error loading final model: \(finalModelName), error: \(error)")
+        }
+    }
+    
+    private func checkAllPlantsBloomedAndPlaySound(_ entity: Entity) async {
+        guard !allPlantsBloomedSoundPlayed else { return }
+        
+        let allBloomed = plantToPlane.keys.allSatisfy { plantId in
+            entityChanged[plantId] == true
+        }
+        
+        if allBloomed, plantToPlane.count == PlantType.allCases.count {
+            allPlantsBloomedSoundPlayed = true
+            
+            try? await Task.sleep(for: .seconds(2))
+            await Entity.playSound(named: "SFX_7", on: entity)
+            await startParticleEmitter()
+        }
+    }
+    
+    @MainActor func startParticleEmitter() {
+        Task {
+            guard let particleBloom = arView.scene.findEntity(named: "ParticleBloom"),
+            let particleEmitter = particleBloom.findEntity(named: "ParticleEmitter")
+            else {
+                print("couldn't find particle bloom")
+                print(arView.scene.anchors)
+                return
+            }
+            print("got it")
+            
+            guard var emitter = particleEmitter.components[ParticleEmitterComponent.self] else {
+                print("emitter not found")
+                return
+            }
+            emitter.isEmitting = true
+            particleEmitter.components.set(emitter)
+            particleEmitter.isEnabled = true
+            particleBloom.isEnabled = true
+            
+            particleBloom.position.z -= 0.75
         }
     }
 }

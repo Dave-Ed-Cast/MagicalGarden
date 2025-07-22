@@ -53,31 +53,7 @@ struct ImmersiveView: View {
         }
         .onAppear {
             if planeDetector == nil { setupPlaneDetector() }
-            
-            Task {
-                try? await planeDetector?.startDetection()
-                planeDetector?.onPlaneDetected = { anchorEntity, arAnchor in
-                    let width = arAnchor.planeExtent.width
-                    let depth = arAnchor.planeExtent.height
-                    let height: Float = 0.05
-                    
-                    let position = SIMD3<Float>(arAnchor.center.x, 0, arAnchor.center.z)
-                    
-                    let mesh = MeshResource.generateBox(size: [width, height, depth])
-                    let material = SimpleMaterial(color: .green.withAlphaComponent(0.5), isMetallic: false)
-                    let box = ModelEntity(mesh: mesh, materials: [material])
-                    
-                    box.position = position
-                    anchorEntity.addChild(box)
-                    
-                    if let iosDetector = planeDetector as? iOSPlaneDetector {
-                        Task.detached { @MainActor in
-                            iosDetector.arView.scene.addAnchor(anchorEntity)
-                            print("Plane box added: \(width) x \(depth)m")
-                        }
-                    }
-                }
-            }
+            addPlane()
         }
 #endif
     }
@@ -85,6 +61,33 @@ struct ImmersiveView: View {
     private func setupPlaneDetector() {
         let detector = iOSPlaneDetector()
         planeDetector = detector
+    }
+    
+    private func addPlane() {
+        Task {
+            try? await planeDetector?.startDetection()
+            planeDetector?.onPlaneDetected = { anchorEntity, arAnchor in
+                let width = arAnchor.planeExtent.width
+                let depth = arAnchor.planeExtent.height
+                let height: Float = 0.05
+                
+                let position = SIMD3<Float>(arAnchor.center.x, 0, arAnchor.center.z)
+                
+                let mesh = MeshResource.generateBox(size: [width, height, depth])
+                let material = SimpleMaterial(color: .green.withAlphaComponent(0.3), isMetallic: false)
+                let box = ModelEntity(mesh: mesh, materials: [material])
+                
+                box.position = position
+                anchorEntity.addChild(box)
+                
+                if let iosDetector = planeDetector as? iOSPlaneDetector {
+                    Task.detached { @MainActor in
+                        iosDetector.arView.scene.addAnchor(anchorEntity)
+                        print("Plane box added: \(width) x \(depth)m")
+                    }
+                }
+            }
+        }
     }
 #endif
 }
