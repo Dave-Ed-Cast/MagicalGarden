@@ -18,23 +18,28 @@ struct MagicalGardenApp: App {
     var body: some Scene {
         WindowGroup(id: "main") {
             ZStack {
-                if onboarding.completed {
-                    ContentView()
-                } else {
-                    InfoView(showInfo: .constant(true))
-                }
+                if onboarding.completed { ContentView() }
+                else { OnboardingView(showInfo: .constant(true)) }
             }
             .frame(width: 676, height: 550)
             .fixedSize()
+            .environment(onboarding)
+            .environment(appModel)
         }
+        .defaultSize(width: 676, height: 550)
         
         ImmersiveSpace(id: appModel.immersiveSpaceID) {
             ImmersiveView()
                 .environment(appModel)
-                .onAppear { appModel.immersiveSpaceState = .open }
-                .onDisappear { appModel.immersiveSpaceState = .closed }
+                .onAppear {
+                    appModel.immersiveSpaceState = .open
+                    AudioManager.shared.playBackgroundMusic(named: "Music")
+                }
+                .onDisappear {
+                    appModel.immersiveSpaceState = .closed
+                    AudioManager.shared.stopBackgroundMusic()
+                }
         }
-        .immersionStyle(selection: .constant(.full), in: .full)
     }
 #endif
     
@@ -42,7 +47,7 @@ struct MagicalGardenApp: App {
     var body: some Scene {
         
         Group {
-            let size = UIScreen.main.bounds.size
+            let width = UIScreen.main.bounds.size.width
             WindowGroup {
                 ZStack {
                     if appModel.immersiveSpaceState == .open {
@@ -57,7 +62,7 @@ struct MagicalGardenApp: App {
                     DisclosureGroup("Menu", isExpanded: $isMenuExpanded) {
                         MenuView(appModel: appModel)
                     }
-                    .frame(width: isMenuExpanded ? size.width * 0.79 : size.width * 0.2)
+                    .frame(width: isMenuExpanded ? width * 0.79 : width * 0.2)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 20)
                     .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 20))

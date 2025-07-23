@@ -33,7 +33,7 @@ def Xform "Root"
                 bool loops = 0
                 float particleSpeed = 0.06
                 float particleSpeedVariation = 0.04
-                float3 shapeSize = (0.1, 0.1, 0.1)
+                float3 shapeSize = (0.3, 0.2, 0.1)
                 bool spawnInheritParentColor = 1
                 token spawnOccasion = "OnUpdate"
                 float spawnSpreadFactor = 0

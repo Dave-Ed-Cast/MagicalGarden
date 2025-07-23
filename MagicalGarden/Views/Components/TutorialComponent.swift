@@ -13,18 +13,18 @@ struct TutorialComponent: View {
 
     var imageName: String {
         switch stepNumber {
-        case 1: "dicomIcon"
-        case 2: "Sphere"
-        case 3: "Window"
+        case 1: "garden"
+        case 2: "surfaces"
+        case 3: "bloom"
         default: "unexpected"
         }
     }
     
     var bodyText: String {
         switch stepNumber {
-        case 1: "Import the DICOM dataset from your local folder into the system."
-        case 2: "The system will generate a 3D model from the imported DICOM dataset."
-        case 3: "The system allows connection to a fluoroscope for real-time streaming of live 2D X-ray images."
+        case 1: "Enter the garden by interacting with the interface."
+        case 2: "Look around for surfaces that light up, and click on them to spawn plants"
+        case 3: "When the plants are ready, they will be signaled."
         default: "Unexpected tutorial step."
         }
     }
@@ -38,7 +38,7 @@ struct TutorialComponent: View {
             
             Image(imageName)
                 .resizable()
-                .frame(width: 160, height: 160)
+                .frame(width: 320, height: stepNumber == 3 ? 200 : 160)
 
             Spacer()
             

@@ -9,8 +9,9 @@ import SwiftUI
 import RealityKit
 import ARKit
 
+#if os(iOS)
 //MARK: Completely public methods (for reading clarity)
-extension iOSPlaneDetector {
+extension ObjectSpawnerAndHandler {
     
     func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
         for anchor in anchors.compactMap({ $0 as? ARPlaneAnchor }) {
@@ -25,10 +26,11 @@ extension iOSPlaneDetector {
 }
 
 struct PlaneDetectingARView: UIViewRepresentable {
-    @Bindable var detector: iOSPlaneDetector
+    @Bindable var detector: ObjectSpawnerAndHandler
     
     func makeUIView(context: Context) -> ARView { detector.makeARView() }
     
     func updateUIView(_ uiView: ARView, context: Context) {}
 }
+#endif
 

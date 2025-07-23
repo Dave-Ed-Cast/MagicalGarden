@@ -5,50 +5,60 @@
 //  Created by Davide Castaldi on 16/07/25.
 //
 
-import SwiftUI
 import RealityKit
 import ARKit
-
+import SwiftUI
+#if os(visionOS)
 class MeshGenerator {
     
     var root: Entity
     
+    private var anchors: [UUID: AnchorEntity] = [:]
+    
     init(root: Entity) { self.root = root }
     
-#if os(visionOS)
     
-    @MainActor
-    func run(_ planeProvider: PlaneDetectionProvider) async {
+    @MainActor func run(_ planeProvider: PlaneDetectionProvider, onPlaneDetected: @escaping (UUID, AnchorEntity) -> Void) async {
         for await update in planeProvider.anchorUpdates {
-            if update.anchor.classification != .floor,
-               update.anchor.classification != .table {
-                continue // Skip non-floor/table planes
-            }
+            guard update.anchor.classification == .floor
+                    || update.anchor.classification == .table
+            else { continue }
             
             switch update.event {
-            case .added, .updated:
-                let entity = anchors[update.anchor.id] ?? {
-                    let entity = Entity()
-                    root.addChild(entity)
-                    anchors[update.anchor.id] = entity
-                    return entity
+            case .added:
+                let anchorEntity = anchors[update.anchor.id] ?? {
+                    let newAnchor = AnchorEntity()
+                    newAnchor.name = "planeAnchor-\(update.anchor.id.uuidString.prefix(4))"
+                    newAnchor.components.set(PlaneIDComponent(id: update.anchor.id))
+                    root.addChild(newAnchor)
+                    anchors[update.anchor.id] = newAnchor
+                    return newAnchor
                 }()
-                
-                let material = SimpleMaterial(color: .cyan.withAlphaComponent(0.8), isMetallic: false)
                 
                 guard let mesh = try? await MeshResource(from: update.anchor) else { return }
                 
-                await MainActor.run {
-                    entity.components.set(ModelComponent(mesh: mesh, materials: [material]))
-                    entity.setTransformMatrix(update.anchor.originFromAnchorTransform, relativeTo: nil)
-                }
+                let material = SimpleMaterial(color: .cyan.withAlphaComponent(0.25), isMetallic: false)
+                let modelEntity = ModelEntity(mesh: mesh, materials: [material])
+                
+                modelEntity.name = "planeMesh-\(update.anchor.id.uuidString.prefix(4))"
+                
+                modelEntity.generateCollisionShapes(recursive: false)
+                modelEntity.components.set([InputTargetComponent(), PlaneAnchorComponent(anchor: update.anchor)])
+                
+                modelEntity.setTransformMatrix(update.anchor.originFromAnchorTransform, relativeTo: nil)
+                
+                
+                anchorEntity.addChild(modelEntity)
+                // 6) Callback, if you need it
+                onPlaneDetected(update.anchor.id, anchorEntity)
                 
             case .removed:
                 anchors[update.anchor.id]?.removeFromParent()
                 anchors[update.anchor.id] = nil
+                
+            default: continue
             }
         }
     }
-#endif
-    
 }
+#endif

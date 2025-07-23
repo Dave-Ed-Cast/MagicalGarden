@@ -1,13 +1,13 @@
 //
-//  PopoverView.swift
-//  AnAppleADay
+//  OnboardingView.swift
+//  MagicalGarden
 //
-//  Created by Davide Castaldi on 27/02/25.
+//  Created by Davide Castaldi on 22/07/25.
 //
 
 import SwiftUI
 
-struct InfoView: View {
+struct OnboardingView: View {
     
     @Environment(OnboardingParameters.self) private var onboarding
     

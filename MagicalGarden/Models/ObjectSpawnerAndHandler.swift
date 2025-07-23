@@ -1,31 +1,48 @@
 //
-//  iOSPlaneDetector.swift
+//  PlaneDetector.swift
 //  MagicalGarden
 //
-//  Created by Davide Castaldi on 17/07/25.
+//  Created by Davide Castaldi on 22/07/25.
 //
 
 import RealityKit
-import RealityKitContent
 import ARKit
 
+#if os(iOS)
+import RealityKitContent
+#endif
+
 @Observable
-final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegate {
+final class ObjectSpawnerAndHandler: NSObject {
     
-    var isDetecting = false
-    var detectedPlanes: [String: AnchorEntity] = [:]
-    var onPlaneDetected: ((AnchorEntity, ARPlaneAnchor) -> Void)?
-    var entityChanged: [String: Bool] = [:]
+    #if os(visionOS)
+    var root: Entity
+    var meshGenerator: MeshGenerator?
     
+    init(root: Entity) {
+        self.root = root
+        self.meshGenerator = MeshGenerator(root: root)
+    }
+    
+    #elseif os(iOS)
     private(set) var arView: ARView!
-    private var planePlantIndex: [UUID: Int] = [:]
-    private var planeActivePlants: [UUID: Set<String>] = [:]
-    private var plantToPlane: [String: UUID] = [:]
+    var isDetecting = false
+    var onPlaneDetected: ((AnchorEntity, ARPlaneAnchor) -> Void)?
+    
+    private var hasStartedDetection = false
+    #endif
+    
+    var detectedPlanes: [String: AnchorEntity] = [:]
+    
     private let maxPlantsPerPlane = PlantType.allCases.count
     
+    private var entityChanged: [String: Bool] = [:]
+    private var planePlantIndex: [UUID: Int] = [:]
+    private var planeActivePlants: [UUID: Set<String>] = [:]
+    private var plantToPlane: [String: UUID] = [:]    
     private var allPlantsBloomedSoundPlayed = false
-    private var hasStartedDetection = false
-    
+
+    #if os(iOS)
     func makeARView() -> ARView {
         let view = ARView(frame: .zero)
         view.session.delegate = self
@@ -40,6 +57,7 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
                 return
             }
             
+           
             particleBloom.name = "ParticleBloom"
             particleBloom.isEnabled = false
             
@@ -65,6 +83,10 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
         guard let view = arView else { return }
         let tapLocation = sender.location(in: view)
         
+        let haptic = UIImpactFeedbackGenerator(style: .medium)
+        haptic.prepare()
+        haptic.impactOccurred()
+        
         if changeEntityStatus(at: tapLocation, in: view) { return }
         
         spawnUniqueEntity(at: tapLocation, in: view)
@@ -75,7 +97,7 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
         
         while let parent = entity.parent, entity.components[PlantComponent.self] == nil { entity = parent }
         
-        guard let plantComp = entity.components[PlantComponent.self] else {  return false }
+        guard let plantComp = entity.components[PlantComponent.self] else { return false }
         
         let timerCompleted = hasTimerCompleted(in: entity)
         
@@ -85,17 +107,6 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
             return true
         } else if !timerCompleted, plantComp.stage == .growth {
             print("Timer not completed yet - wait for 'Tap to bloom!' message")
-        }
-        return false
-    }
-    
-    private func hasTimerCompleted(in entity: Entity) -> Bool {
-        for child in entity.children {
-            if child.name == "sphere_timer_container" {
-                for grandChild in child.children {
-                    if grandChild.name == "sphere_timer_completion_text" { return true }
-                }
-            }
         }
         return false
     }
@@ -123,6 +134,120 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
         }
         
         planePlantIndex[planeId] = currentIndex + 1
+    }
+    
+    #endif
+    #if os(visionOS)
+    
+    @MainActor
+    func handleTap(location: SIMD3<Float>) async {
+        guard let planeDetector = root.components[PlaneDetectorComponent.self]?.detector else {
+            print("PlaneDetector not found. Falling back to interaction.")
+            _ = await changeEntityStatus(at: location)
+            return
+        }
+
+        var nearestPlane: AnchorEntity?
+        var shortestDistance = Float.greatestFiniteMagnitude
+
+        for plane in planeDetector.detectedPlanes.values {
+            let distance = simd_distance(plane.position, location)
+            if distance < shortestDistance {
+                shortestDistance = distance
+                nearestPlane = plane
+            }
+        }
+
+        guard let anchorEntity = nearestPlane else {
+            print("No nearby plane found. Falling back to interaction.")
+            _ = await changeEntityStatus(at: location)
+            return
+        }
+
+        let planeId = anchorEntity.components[PlaneIDComponent.self]?.id ?? UUID()
+        let currentIndex = planeDetector.planePlantIndex[planeId] ?? 0
+        
+        let canSpawn = (currentIndex < PlantType.allCases.count) &&
+                       planeDetector.isValidSpawnLocation(location, on: planeId, minDistance: 0.4)
+
+        if canSpawn {
+            
+            let nextPlantType = PlantType.allCases[currentIndex]
+            await planeDetector.spawnPlantModel(
+                at: location,
+                parent: anchorEntity,
+                type: nextPlantType,
+                planeId: planeId
+            )
+            planeDetector.planePlantIndex[planeId] = currentIndex + 1
+        } else {
+            _ = await changeEntityStatus(at: location)
+        }
+    }
+    private func changeEntityStatus(at location: SIMD3<Float>) async -> Bool {
+        
+        // Define a radius to detect a tap on a plant entity.
+        let tapThreshold: Float = 0.25 // 25cm radius.
+        var closestEntity: Entity?
+        var minDistance = Float.greatestFiniteMagnitude
+        
+        // Iterate through all known plants to find the one closest to the tap location.
+        // The `plantToPlane` dictionary handily tracks all active plants.
+        for plantId in plantToPlane.keys {
+            
+            // `root.findEntity(named:)` recursively searches for an entity with the given name.
+            if let entity = await root.findEntity(named: plantId) {
+                
+                // Get the entity's position in world coordinates.
+                let entityPosition = await entity.position(relativeTo: nil)
+                let distance = simd_distance(entityPosition, location)
+                
+                if distance < minDistance {
+                    minDistance = distance
+                    closestEntity = entity
+                }
+            }
+        }
+        
+        // If the closest plant is within our tap threshold, proceed.
+        guard minDistance < tapThreshold, var entity = closestEntity else {
+            return false
+        }
+        
+        // This loop ensures we have the main parent entity that holds the PlantComponent,
+        // in case a child part of the model was the closest entity found.
+        while let parent = await entity.parent, await entity.components[PlantComponent.self] == nil {
+            // We stop at the root to avoid issues.
+            if parent == root { break }
+            entity = parent
+        }
+        
+        // Now, we replicate the logic from the iOS version of this function.
+        guard let plantComp = await entity.components[PlantComponent.self] else { return false }
+        
+        let timerCompleted = hasTimerCompleted(in: entity)
+        
+        // Check if the plant is ready to advance to the next stage.
+        if entityChanged[plantComp.id] == false, plantComp.stage != .bloom, timerCompleted {
+            entityChanged[plantComp.id] = true
+            Task { await advancePlantStage(for: entity, component: plantComp) }
+            return true
+        } else if !timerCompleted, plantComp.stage == .growth {
+            print("Timer not completed yet - wait for 'Tap to bloom!' message")
+        }
+        
+        return false
+    }
+    #endif
+    private func hasTimerCompleted(in entity: Entity) -> Bool {
+        for child in entity.children {
+            if child.name == "sphere_timer_container" {
+                for grandChild in child.children {
+                    if grandChild.name == "sphere_timer_completion_text" { return true }
+                }
+            }
+        }
+        return false
     }
     
     private func isValidSpawnLocation(_ position: SIMD3<Float>, on planeId: UUID, minDistance: Float) -> Bool {
@@ -277,25 +402,36 @@ final class iOSPlaneDetector: NSObject, PlaneDetectionProtocol, ARSessionDelegat
     
     @MainActor func startParticleEmitter() {
         Task {
-            guard let particleBloom = arView.scene.findEntity(named: "ParticleBloom"),
-            let particleEmitter = particleBloom.findEntity(named: "ParticleEmitter")
-            else {
+#if os(iOS)
+            guard let particleBloom = arView.scene.findEntity(named: "ParticleBloom") else {
                 print("couldn't find particle bloom")
-                print(arView.scene.anchors)
+                return
+            }
+#elseif os(visionOS)
+            guard let particleBloom = root.findEntity(named: "ParticleBloom") else {
+                print("couldn't find particle bloom")
                 return
             }
             print("got it")
+#endif
             
-            guard var emitter = particleEmitter.components[ParticleEmitterComponent.self] else {
-                print("emitter not found")
-                return
+            if let particleEmitter = particleBloom.findEntity(named: "ParticleEmitter") {
+                
+                guard var emitter = particleEmitter.components[ParticleEmitterComponent.self] else {
+                    print("emitter not found")
+                    return
+                }
+                emitter.isEmitting = true
+                particleEmitter.components.set(emitter)
+                particleEmitter.isEnabled = true
+                particleBloom.isEnabled = true
+                
+                particleBloom.position.z -= 1
             }
-            emitter.isEmitting = true
-            particleEmitter.components.set(emitter)
-            particleEmitter.isEnabled = true
-            particleBloom.isEnabled = true
-            
-            particleBloom.position.z -= 0.75
         }
     }
 }
+
+#if os(iOS)
+extension ObjectSpawnerAndHandler: PlaneDetectionProtocol, ARSessionDelegate {}
+#endif

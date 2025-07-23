@@ -8,6 +8,7 @@
 import SwiftUI
 import RealityKit
 
+#if os(iOS)
 struct MenuView: View {
     
     @Environment(\.openWindow) var openWindow
@@ -51,3 +52,4 @@ struct EnterReturnToggleStyle: ToggleStyle {
         }
     }
 }
+#endif
