@@ -8,6 +8,7 @@
 import SwiftUI
 
 extension View {
+    /// For iOS anchoring of the menu
     func anchorToTopLeft() -> some View { modifier(AnchorToTopLeftModifier()) }
 }
 

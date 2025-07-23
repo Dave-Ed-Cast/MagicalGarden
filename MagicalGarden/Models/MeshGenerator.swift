@@ -17,7 +17,7 @@ class MeshGenerator {
     
     init(root: Entity) { self.root = root }
     
-    
+    /// Runs the detection of planes, and when detected it adds the ID to the `ObjectSpawnerAndHandler`
     @MainActor func run(_ planeProvider: PlaneDetectionProvider, onPlaneDetected: @escaping (UUID, AnchorEntity) -> Void) async {
         for await update in planeProvider.anchorUpdates {
             guard update.anchor.classification == .floor
@@ -47,9 +47,7 @@ class MeshGenerator {
                 
                 modelEntity.setTransformMatrix(update.anchor.originFromAnchorTransform, relativeTo: nil)
                 
-                
                 anchorEntity.addChild(modelEntity)
-                // 6) Callback, if you need it
                 onPlaneDetected(update.anchor.id, anchorEntity)
                 
             case .removed:

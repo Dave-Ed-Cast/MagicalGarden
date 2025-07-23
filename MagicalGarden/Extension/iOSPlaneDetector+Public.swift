@@ -13,6 +13,10 @@ import ARKit
 //MARK: Completely public methods (for reading clarity)
 extension ObjectSpawnerAndHandler {
     
+    /// Adds a reference of plane and anchor to the ARView
+    /// - Parameters:
+    ///   - session: The ARView session
+    ///   - anchors: The anchor to add
     func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
         for anchor in anchors.compactMap({ $0 as? ARPlaneAnchor }) {
             let anchorEntity = AnchorEntity(anchor: anchor)

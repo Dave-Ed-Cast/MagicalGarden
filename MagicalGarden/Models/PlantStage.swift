@@ -7,6 +7,7 @@
 
 import RealityKit
 
+
 enum PlantStage: String, Codable {
     case growth = "Growth"
     case growthBloom = "Growth+Bloom"
@@ -19,6 +20,7 @@ enum PlantType: String, CaseIterable, Codable {
     case plant03 = "Plant_03"
 }
 
+///Stages of plant to keep track of as a component
 struct PlantComponent: Component {
     var id: String
     var type: PlantType
