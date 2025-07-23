@@ -8,6 +8,7 @@
 import UIKit
 
 extension UIColor {
+    /// Used in the sphere timer to create an interpolation of colors
     func interpolate(to color: UIColor, with fraction: CGFloat) -> UIColor {
         let fraction = max(0, min(1, fraction))
         

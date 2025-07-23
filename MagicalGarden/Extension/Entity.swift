@@ -8,8 +8,11 @@
 import RealityKit
 import SwiftUI
 
+/// Extension to leverage subclassing of Entity
 extension Entity {
     
+    /// Creates terrain for iOS app
+    /// - Returns: A Model entity of a box as a terrain
     func makeTerrain() async throws -> ModelEntity {
         let terrain = ModelEntity(
             mesh: .generateBox(width: 0.5, height: 0.01, depth: 0.05),
@@ -19,6 +22,10 @@ extension Entity {
         return terrain
     }
     
+    /// Plays the sound from an audio resource
+    /// - Parameters:
+    ///   - name: The name of the audio to play
+    ///   - entity: the entity to play it upon
     static func playSound(named name: String, on entity: Entity) {
         guard let resource = try? AudioFileResource.load(named: name, configuration: .init(loadingStrategy: .preload)) else {
             print("Failed to load sound \(name)")
@@ -27,6 +34,11 @@ extension Entity {
         entity.playAudio(resource)
     }
     
+    /// Timer as numbers for visual reference
+    /// - Parameters:
+    ///   - text: The timing
+    ///   - fontSize: The size
+    /// - Returns: A 3D text
     static private func createCenteredText(_ text: String, fontSize: CGFloat = 0.07) -> ModelEntity {
         let textMesh = MeshResource.generateText(
             text,
@@ -54,6 +66,12 @@ extension Entity {
         return textEntity
     }
     
+    /// Set an entity with arameters from another
+    /// - Parameters:
+    ///   - newEntity: The entity
+    ///   - entity: The entity to take parameters from
+    ///   - component: The component that might ben eeded
+    ///   - last: Purely used for last model spawn (bloom)
     static func setNewEntity(
         _ newEntity: Entity,
         from entity: Entity,
@@ -74,6 +92,12 @@ extension Entity {
         entity.removeFromParent()
     }
     
+    /// A spherical timer simulating a constant water drop into the plant
+    /// - Parameters:
+    ///   - totalTime: The time that has to pass
+    ///   - radius: The radius of the sphere
+    ///   - onTimerCompletion: When the timer completes it can execute something
+    /// - Returns: The model Entity of the sphere
     static func createSphericalFillingTimer(
         _ totalTime: Int,
         radius: Float = 0.06,

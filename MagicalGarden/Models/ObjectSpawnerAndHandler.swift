@@ -13,6 +13,7 @@ import RealityKitContent
 #endif
 
 @Observable
+///Given the little time it could not be refactored but most of the common code is kept throughout devices
 final class ObjectSpawnerAndHandler: NSObject {
     
     #if os(visionOS)
@@ -79,6 +80,7 @@ final class ObjectSpawnerAndHandler: NSObject {
         hasStartedDetection = true
     }
     
+    ///When tapping on iOS screen, it checks if it needs to spawn a plant or change an existing one
     @objc private func handleTap(_ sender: UITapGestureRecognizer) {
         guard let view = arView else { return }
         let tapLocation = sender.location(in: view)
@@ -92,6 +94,11 @@ final class ObjectSpawnerAndHandler: NSObject {
         spawnUniqueEntity(at: tapLocation, in: view)
     }
     
+    /// Finds the entity to change the status of
+    /// - Parameters:
+    ///   - location: The tapped location
+    ///   - view: The ARView
+    /// - Returns: Returns true if there is an entity at the location and false otherwise
     private func changeEntityStatus(at location: CGPoint, in view: ARView) -> Bool {
         guard var entity = view.entity(at: location) else { return false }
         
@@ -111,6 +118,10 @@ final class ObjectSpawnerAndHandler: NSObject {
         return false
     }
     
+    /// Checks if the entity spawned can respawn. If it exists, it avoids respawning it
+    /// - Parameters:
+    ///  - location: The tapped location
+    ///  - view: The ARView
     private func spawnUniqueEntity(at location: CGPoint, in view: ARView) {
         let results = view.raycast(from: location, allowing: .existingPlaneGeometry, alignment: .horizontal)
         guard let first = results.first,
@@ -139,8 +150,10 @@ final class ObjectSpawnerAndHandler: NSObject {
     #endif
     #if os(visionOS)
     
-    @MainActor
-    func handleTap(location: SIMD3<Float>) async {
+    /// Differently from the handleTap on iOS, we have the root as a reference to the scene, we only need the coordinates
+    /// - Parameters:
+    ///  - location: The tapped location
+    @MainActor func handleTap(location: SIMD3<Float>) async {
         guard let planeDetector = root.components[PlaneDetectorComponent.self]?.detector else {
             print("PlaneDetector not found. Falling back to interaction.")
             _ = await changeEntityStatus(at: location)
@@ -184,18 +197,21 @@ final class ObjectSpawnerAndHandler: NSObject {
             _ = await changeEntityStatus(at: location)
         }
     }
+    
+    /// Finds the entity to change the status of
+    /// - Parameters:
+    ///   - location: The tapped location in visionOS world
+    /// - Returns: Returns true if there is an entity at the location and false otherwise
     private func changeEntityStatus(at location: SIMD3<Float>) async -> Bool {
         
-        // Define a radius to detect a tap on a plant entity.
-        let tapThreshold: Float = 0.25 // 25cm radius.
+        // Define a radius to detect a tap on a plant entity (25cm radius)
+        let tapThreshold: Float = 0.25
         var closestEntity: Entity?
         var minDistance = Float.greatestFiniteMagnitude
         
         // Iterate through all known plants to find the one closest to the tap location.
-        // The `plantToPlane` dictionary handily tracks all active plants.
         for plantId in plantToPlane.keys {
-            
-            // `root.findEntity(named:)` recursively searches for an entity with the given name.
+            // Recursively searches for an entity with the given name.
             if let entity = await root.findEntity(named: plantId) {
                 
                 // Get the entity's position in world coordinates.
@@ -222,7 +238,7 @@ final class ObjectSpawnerAndHandler: NSObject {
             entity = parent
         }
         
-        // Now, we replicate the logic from the iOS version of this function.
+        // Now, the same logic from the iOS version of this function.
         guard let plantComp = await entity.components[PlantComponent.self] else { return false }
         
         let timerCompleted = hasTimerCompleted(in: entity)
@@ -239,6 +255,10 @@ final class ObjectSpawnerAndHandler: NSObject {
         return false
     }
     #endif
+    
+    /// Checks if the timer has been completed for the entity
+    /// - Parameter entity: The entity to check upon
+    /// - Returns: true if the timer has been completed
     private func hasTimerCompleted(in entity: Entity) -> Bool {
         for child in entity.children {
             if child.name == "sphere_timer_container" {
@@ -250,6 +270,13 @@ final class ObjectSpawnerAndHandler: NSObject {
         return false
     }
     
+    
+    /// Checks if the spawn location is valid
+    /// - Parameters:
+    ///   - position: The 3D position
+    ///   - planeId: The tapped plane id
+    ///   - minDistance: The minimum distance to avoid overlap
+    /// - Returns: True if it's valid
     private func isValidSpawnLocation(_ position: SIMD3<Float>, on planeId: UUID, minDistance: Float) -> Bool {
         guard let activePlants = planeActivePlants[planeId] else { return true }
         
@@ -264,6 +291,11 @@ final class ObjectSpawnerAndHandler: NSObject {
         return true
     }
     
+    /// Finds the name of the searched entity in the ARView
+    /// - Parameters:
+    ///   - id: The ID string
+    ///   - parent: The parent to search upon
+    /// - Returns: The entity if found
     private func findPlantEntity(with id: String, in parent: Entity) -> Entity? {
         if parent.name == id { return parent }
         for child in parent.children {
@@ -272,6 +304,14 @@ final class ObjectSpawnerAndHandler: NSObject {
         return nil
     }
     
+    /// Spawns the model for a plant type
+    /// - Parameters:
+    ///   - position: The position to spawn it on
+    ///   - parent: The entity parent
+    ///   - type: The type of plant to spawn next
+    ///   - planeId: The plane ID
+    ///
+    /// ### These parameters are just to place the component on the entity to check on later
     func spawnPlantModel(at position: SIMD3<Float>, parent: Entity, type: PlantType, planeId: UUID) async {
         let plantId = UUID().uuidString
         let modelName = "\(type.rawValue)_Growth"
@@ -317,6 +357,10 @@ final class ObjectSpawnerAndHandler: NSObject {
         print("Spawned \(type.rawValue) plant (\(plantId)) with timer ring on plane \(planeId)")
     }
     
+    /// Advances to the next step the plant growth
+    /// - Parameters:
+    ///   - entity: The entity to grow
+    ///   - component: The component to set on that entity
     private func advancePlantStage(for entity: Entity, component: PlantComponent) async {
         guard let nextStage = component.stage.next else {
             print("Plant \(component.id) is already in final bloom stage")
@@ -343,6 +387,10 @@ final class ObjectSpawnerAndHandler: NSObject {
         }
     }
     
+    /// Replaces with the animated model Growth+bloom
+    /// - Parameters:
+    ///   - entity: the entity to change
+    ///   - component: The component to set
     private func replaceWithAnimatedModel(entity: Entity, component: PlantComponent) async {
         
         let animatedModelName = "\(component.type.rawValue)_\(component.stage.rawValue)"
@@ -370,6 +418,10 @@ final class ObjectSpawnerAndHandler: NSObject {
         await replaceWithFinalModel(entity: animatedEntity, component: updatedComponent)
     }
     
+    /// Replaces with the last model
+    /// - Parameters:
+    ///   - entity: The entity to change
+    ///   - component: THe component to set
     private func replaceWithFinalModel(entity: Entity, component: PlantComponent) async {
         let finalModelName = "\(component.type.rawValue)_Bloom"
         
@@ -384,6 +436,8 @@ final class ObjectSpawnerAndHandler: NSObject {
         }
     }
     
+    /// Checks if all the 3 plants have bloomed
+    /// - Parameter entity: Checks for each entity
     private func checkAllPlantsBloomedAndPlaySound(_ entity: Entity) async {
         guard !allPlantsBloomedSoundPlayed else { return }
         
@@ -400,6 +454,7 @@ final class ObjectSpawnerAndHandler: NSObject {
         }
     }
     
+    /// Starts the bioluminescent bloom after blooming everyone 
     @MainActor func startParticleEmitter() {
         Task {
 #if os(iOS)
